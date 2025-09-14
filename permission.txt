@@ -1,4 +1,4 @@
-
+ANDROID:
 
 أضف داخل AndroidManifest قبل وسم <application> التصاريح التالية:
 
@@ -10,3 +10,13 @@
 <uses-feature android:name="android.hardware.nfc" android:required="true" />
 
 <!-- إذا حاب التطبيق يشتغل حتى على أجهزة بدون NFC خلي required="false" -->
+
+IOS:
+
+ios/Runner/Runner.entitlements
+add this lines
+
+<key>com.apple.developer.nfc.readersession.formats</key>
+<array>
+  <string>NDEF</string>
+</array>
