@@ -1,0 +1,9 @@
+أضف داخل <manifest ...> قبل وسم <application> التصاريح التالية:
+
+<!-- صلاحية استخدام NFC -->
+<uses-permission android:name="android.permission.NFC" />
+
+<!-- شرط: التطبيق يحتاج NFC -->
+<uses-feature android:name="android.hardware.nfc" android:required="true" />
+
+<!-- إذا حاب التطبيق يشتغل حتى على أجهزة بدون NFC خلي required="false" -->
