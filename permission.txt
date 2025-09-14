@@ -1,4 +1,7 @@
-أضف داخل <manifest ...> قبل وسم <application> التصاريح التالية:
+
+
+أضف داخل AndroidManifest قبل وسم <application> التصاريح التالية:
+
 
 <!-- صلاحية استخدام NFC -->
 <uses-permission android:name="android.permission.NFC" />
