@@ -91,81 +91,88 @@ class _NfcHomePageState extends State<NfcHomePage> {
 
      await NfcManager.instance.startSession(
   pollingOptions: {NfcPollingOption.iso14443, NfcPollingOption.iso15693},
-  onDiscovered: (NfcTag tag) async {
-    try {
-      String uid = "Unknown UID";
 
-      final data = tag.data as Map<String, dynamic>;
 
-      final nfca = data["nfca"] as Map<String, dynamic>?;
-      final nfcaIdentifier = nfca?["identifier"];
-      if (nfcaIdentifier is Uint8List) {
-        uid = nfcaIdentifier
+  //*****************************  onDiscovered   *********************************************/
+
+
+onDiscovered: (NfcTag tag) async {
+  try {
+    String uid = "Unknown UID";
+
+    // 🔹 الحل هنا
+    final Map<String, dynamic> data = Map<String, dynamic>.from(tag.data as Map);
+
+    final nfca = data["nfca"] as Map<String, dynamic>?;
+    final nfcaIdentifier = nfca?["identifier"];
+    if (nfcaIdentifier is Uint8List) {
+      uid = nfcaIdentifier
+          .map((b) => b.toRadixString(16).padLeft(2, '0'))
+          .join(":")
+          .toUpperCase();
+    } else {
+      final mifare = data["mifare"] as Map<String, dynamic>?;
+      final id2 = mifare?["identifier"];
+      if (id2 is Uint8List) {
+        uid = id2
             .map((b) => b.toRadixString(16).padLeft(2, '0'))
             .join(":")
             .toUpperCase();
-      } else {
-        final mifare = data["mifare"] as Map<String, dynamic>?;
-        final id2 = mifare?["identifier"];
-        if (id2 is Uint8List) {
-          uid = id2
-              .map((b) => b.toRadixString(16).padLeft(2, '0'))
-              .join(":")
-              .toUpperCase();
-        }
       }
+    }
 
-      String ndefText = "No NDEF data found.";
+    String ndefText = "No NDEF data found.";
 
-final ndefData = data["ndef"] as Map<String, dynamic>?;
-if (ndefData != null) {
-  final cachedMessage = ndefData["cachedMessage"] as Map<String, dynamic>?;
-  if (cachedMessage != null) {
-    final records = cachedMessage["records"] as List?;
-    if (records != null && records.isNotEmpty) {
-      ndefText = "";
-      for (var r in records) {
-        final payload = r["payload"];
-        if (payload is Uint8List) {
-          try {
-            ndefText += String.fromCharCodes(payload) + "\n";
-          } catch (_) {
-            ndefText += payload.toString() + "\n";
+    final ndefData = data["ndef"] as Map<String, dynamic>?;
+    if (ndefData != null) {
+      final cachedMessage = ndefData["cachedMessage"] as Map<String, dynamic>?;
+      if (cachedMessage != null) {
+        final records = cachedMessage["records"] as List?;
+        if (records != null && records.isNotEmpty) {
+          ndefText = "";
+          for (var r in records) {
+            final payload = r["payload"];
+            if (payload is Uint8List) {
+              try {
+                ndefText += String.fromCharCodes(payload) + "\n";
+              } catch (_) {
+                ndefText += payload.toString() + "\n";
+              }
+            }
           }
         }
       }
     }
-  }
-}
 
-      final result = {
-        "uid": uid,
-        "type": data.keys.join(", "),
-        "ndef": ndefText,
-      };
+    final result = {
+      "uid": uid,
+      "type": data.keys.join(", "),
+      "ndef": ndefText,
+    };
 
-      if (!mounted) return;
+    if (!mounted) return;
+    setState(() {
+      _readResult = _formatResultFromMap(result);
+      _statusMessage = "✅ تم قراءة البطاقة بنجاح.";
+    });
+  } catch (e) {
+    if (!mounted) return;
+    setState(() {
+      _readResult = "❌ خطأ أثناء معالجة البطاقة:\n$e";
+      _statusMessage = "⚠️ فشل القراءة.";
+    });
+  } finally {
+    try {
+      await NfcManager.instance.stopSession();
+    } catch (_) {}
+    if (mounted) {
       setState(() {
-        _readResult = _formatResultFromMap(result);
-        _statusMessage = "✅ تم قراءة البطاقة بنجاح.";
+        _isScanning = false;
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _readResult = "❌ خطأ أثناء معالجة البطاقة:\n$e";
-        _statusMessage = "⚠️ فشل القراءة.";
-      });
-    } finally {
-      try {
-        await NfcManager.instance.stopSession();
-      } catch (_) {}
-      if (mounted) {
-        setState(() {
-          _isScanning = false;
-        });
-      }
     }
-  },
+  }
+},
+
 );
 
     } on PlatformException catch (p) {
