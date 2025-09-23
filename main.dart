@@ -1,12 +1,11 @@
-//main.dart
 
-//تطبيق Flutter لقراءة شرائح NFC (يدعم الوضع الحقيقي والمحاكاة). 
-//يتيح قراءة UID وبيانات NDEF مع واجهة عصرية وسهلة الاستخدام.
-
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nfc_manager/nfc_manager.dart';
+
+
+
+
 
 
 
@@ -95,70 +94,113 @@ class _NfcHomePageState extends State<NfcHomePage> {
 
   //*****************************  onDiscovered   *********************************************/
 
-
 onDiscovered: (NfcTag tag) async {
   try {
+    // إصدار صوت عند الاكتشاف
+    SystemSound.play(SystemSoundType.click);
+
+    setState(() {
+      _statusMessage = "📡 تم اكتشاف بطاقة NFC. جاري المعالجة...";
+    });
+
     String uid = "Unknown UID";
+    String ndefText = "لا توجد بيانات NDEF.";
 
-    // 🔹 الحل هنا
-    final Map<String, dynamic> data = Map<String, dynamic>.from(tag.data as Map);
+    // تحويل tag.data إلى Map
+    final Map<String, dynamic> data =
+        Map<String, dynamic>.from(tag.data as Map);
 
-    final nfca = data["nfca"] as Map<String, dynamic>?;
-    final nfcaIdentifier = nfca?["identifier"];
-    if (nfcaIdentifier is Uint8List) {
-      uid = nfcaIdentifier
-          .map((b) => b.toRadixString(16).padLeft(2, '0'))
-          .join(":")
-          .toUpperCase();
-    } else {
-      final mifare = data["mifare"] as Map<String, dynamic>?;
-      final id2 = mifare?["identifier"];
-      if (id2 is Uint8List) {
-        uid = id2
+    // -------- 1) المحاولة عبر NfcA --------
+    setState(() {
+      _statusMessage = "🔍 محاولة استخراج UID عبر NfcA...";
+    });
+    if (data.containsKey('nfca')) {
+      final nfca = data['nfca'];
+      if (nfca != null && nfca['identifier'] != null) {
+        final bytes = nfca['identifier'] as Uint8List;
+        uid = bytes
             .map((b) => b.toRadixString(16).padLeft(2, '0'))
             .join(":")
             .toUpperCase();
+        setState(() {
+          _statusMessage = "✅ UID مستخرج عبر NfcA.";
+        });
       }
     }
 
-    String ndefText = "No NDEF data found.";
+    // -------- 2) المحاولة عبر MifareClassic --------
+    if (uid == "Unknown UID" && data.containsKey('mifareclassic')) {
+      final mifare = data['mifareclassic'];
+      if (mifare != null && mifare['identifier'] != null) {
+        final bytes = mifare['identifier'] as Uint8List;
+        uid = bytes
+            .map((b) => b.toRadixString(16).padLeft(2, '0'))
+            .join(":")
+            .toUpperCase();
+        setState(() {
+          _statusMessage = "✅ UID مستخرج عبر MifareClassic.";
+        });
+      } else {
+        setState(() {
+          _statusMessage = "⚠️ لا يمكن استخراج UID عبر MifareClassic.";
+        });
+      }
+    }
 
-    final ndefData = data["ndef"] as Map<String, dynamic>?;
-    if (ndefData != null) {
-      final cachedMessage = ndefData["cachedMessage"] as Map<String, dynamic>?;
-      if (cachedMessage != null) {
-        final records = cachedMessage["records"] as List?;
-        if (records != null && records.isNotEmpty) {
-          ndefText = "";
-          for (var r in records) {
-            final payload = r["payload"];
-            if (payload is Uint8List) {
-              try {
-                ndefText += String.fromCharCodes(payload) + "\n";
-              } catch (_) {
-                ndefText += payload.toString() + "\n";
+    // -------- 3) قراءة بيانات NDEF --------
+    setState(() {
+      _statusMessage = "📖 محاولة قراءة بيانات NDEF...";
+    });
+    if (data.containsKey('ndef')) {
+      final ndef = data['ndef'] as Map<String, dynamic>?;
+      if (ndef != null && ndef['cachedMessage'] != null) {
+        final cachedMessage =
+            ndef['cachedMessage'] as Map<String, dynamic>?;
+        if (cachedMessage != null && cachedMessage['records'] != null) {
+          final records = cachedMessage['records'] as List?;
+          if (records != null && records.isNotEmpty) {
+            ndefText = "";
+            for (var r in records) {
+              final payload = r['payload'];
+              if (payload is Uint8List) {
+                try {
+                  ndefText += String.fromCharCodes(payload) + "\n";
+                } catch (_) {
+                  ndefText += payload.toString() + "\n";
+                }
               }
             }
+            setState(() {
+              _statusMessage = "✅ بيانات NDEF مقروءة.";
+            });
+          } else {
+            setState(() {
+              _statusMessage = "ℹ️ لا توجد سجلات NDEF.";
+            });
           }
         }
       }
+    } else {
+      setState(() {
+        _statusMessage = "⚠️ البطاقة ليست من نوع NDEF.";
+      });
     }
 
+    // -------- 4) عرض النتيجة --------
     final result = {
       "uid": uid,
-      "type": data.keys.join(", "),
       "ndef": ndefText,
     };
 
     if (!mounted) return;
     setState(() {
       _readResult = _formatResultFromMap(result);
-      _statusMessage = "✅ تم قراءة البطاقة بنجاح.";
+      _statusMessage += "\n🎉 تمت العملية بنجاح.";
     });
   } catch (e) {
     if (!mounted) return;
     setState(() {
-      _readResult = "❌ خطأ أثناء معالجة البطاقة:\n$e";
+      _readResult = "❌ خطأ أثناء المعالجة:\n$e";
       _statusMessage = "⚠️ فشل القراءة.";
     });
   } finally {
@@ -172,6 +214,8 @@ onDiscovered: (NfcTag tag) async {
     }
   }
 },
+ 
+//********************************************************************************* */
 
 );
 
